@@ -1,1 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1a22">
+<title>Combustível</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: {
+    colors: { ink: '#0f1a22', panel: '#162630', line: '#27394a', fuel: '#f2b134', eta: '#4fd1b0', mute: '#8fa3b3' },
+    fontFamily: { sans: ['Barlow', 'system-ui', 'sans-serif'], num: ['"Barlow Condensed"', 'Barlow', 'sans-serif'] }
+  } }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body { background: #0f1a22; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  input, button { font-family: inherit; }
+  input:focus-visible, button:focus-visible { outline: 2px solid #f2b134; outline-offset: 2px; }
+  .field { width: 100%; background: #0f1a22; border: 1px solid #27394a; border-radius: 10px; padding: 12px 14px; color: #e8eef2; font-size: 17px; }
+  .field::placeholder { color: #55697a; }
+  .lbl { display: block; font-size: 13px; color: #8fa3b3; margin-bottom: 6px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body class="font-sans text-slate-100 antialiased">
+<main class="max-w-xl mx-auto px-4 py-6 space-y-6">
+
+  <header class="flex items-end justify-between">
+    <h1 class="font-num text-3xl font-semibold tracking-tight">Combustível</h1>
+    <span id="monthLabel" class="text-sm text-mute"></span>
+  </header>
+
+  <div id="errorBox" class="hidden rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300"></div>
+
+  <!-- Dashboard -->
+  <section aria-label="Estatísticas" class="grid grid-cols-2 gap-3">
+    <div class="col-span-2 rounded-2xl bg-panel border border-line p-4">
+      <p class="text-sm text-mute">Consumo médio</p>
+      <p class="font-num text-6xl font-bold text-fuel leading-none mt-1"><span id="stAvg">–</span><span class="text-2xl text-mute font-medium ml-2">km/l</span></p>
+      <p id="stAvgSub" class="text-sm text-mute mt-2">Registre ao menos 2 abastecimentos.</p>
+    </div>
+    <div class="rounded-2xl bg-panel border border-line p-4">
+      <p class="text-sm text-mute">Gasto no mês</p>
+      <p id="stSpent" class="font-num text-3xl font-semibold mt-1">–</p>
+    </div>
+    <div class="rounded-2xl bg-panel border border-line p-4">
+      <p class="text-sm text-mute">Km rodados no mês</p>
+      <p class="font-num text-3xl font-semibold mt-1"><span id="stKm">–</span><span class="text-base text-mute ml-1">km</span></p>
+    </div>
+    <div class="col-span-2 rounded-2xl bg-panel border border-line p-4 flex items-baseline justify-between">
+      <p class="text-sm text-mute">Custo por km rodado</p>
+      <p class="font-num text-3xl font-semibold"><span id="stCpk">–</span><span class="text-base text-mute ml-1">R$/km</span></p>
+    </div>
+  </section>
+
+  <!-- Formulário -->
+  <section aria-label="Novo abastecimento" class="rounded-2xl bg-panel border border-line p-4">
+    <h2 class="font-num text-xl font-semibold mb-4">Novo abastecimento</h2>
+    <div class="space-y-4">
+      <div>
+        <label class="lbl" for="odometer">Odômetro atual (km)</label>
+        <input id="odometer" class="field" inputmode="numeric" placeholder="Ex.: 48250" autocomplete="off">
+      </div>
+      <div>
+        <span class="lbl">Combustível</span>
+        <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Combustível">
+          <button type="button" id="fuelGas" role="radio" class="fuel-btn rounded-xl border py-3 font-medium transition-colors">Gasolina</button>
+          <button type="button" id="fuelEth" role="radio" class="fuel-btn rounded-xl border py-3 font-medium transition-colors">Etanol</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <div><label class="lbl" for="price">Preço/L</label><input id="price" class="field px-3" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
+        <div><label class="lbl" for="liters">Litros</label><input id="liters" class="field px-3" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
+        <div><label class="lbl" for="total">Total (R$)</label><input id="total" class="field px-3" inputmode="decimal" placeholder="0,00" autocomplete="off"></div>
+      </div>
+      <p class="text-xs text-mute -mt-2">Preencha dois campos e o terceiro é calculado.</p>
+      <div>
+        <label class="lbl" for="notes">Observação (opcional)</label>
+        <input id="notes" class="field" placeholder="Posto ou bandeira" maxlength="80" autocomplete="off">
+      </div>
+      <p id="formMsg" class="text-sm text-red-300 hidden" role="alert"></p>
+      <button id="saveBtn" type="button" class="w-full rounded-xl bg-fuel text-ink font-semibold text-lg py-3.5 transition-colors active:scale-[.99]">Salvar abastecimento</button>
+    </div>
+  </section>
+
+  <!-- Padrões -->
+  <section aria-label="Padrões" class="rounded-2xl bg-panel border border-line p-4">
+    <h2 class="font-num text-xl font-semibold mb-4">Quando você abastece</h2>
+    <div id="weekdays" class="flex items-end justify-between gap-1.5 h-32"></div>
+    <div id="bands" class="mt-5 space-y-2.5"></div>
+    <p id="patternEmpty" class="text-sm text-mute hidden">Os padrões aparecem depois do primeiro abastecimento.</p>
+  </section>
+
+  <!-- Histórico -->
+  <section aria-label="Histórico" class="pb-8">
+    <h2 class="font-num text-xl font-semibold mb-3">Últimos abastecimentos</h2>
+    <div id="history" class="space-y-3"></div>
+  </section>
+</main>
+
+<script>
+const SUPABASE_URL = "https://tgkasylqlqqgasmfawclz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ShYM7ktwUEautOIhMa5Cxw_ifXtnzku";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = id => document.getElementById(id);
+const num = v => { const n = parseFloat(String(v).trim().replace(',', '.')); return isNaN(n) ? null : n; };
+const fmt = (n, d = 1) => n.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const brl = n => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let rows = [];
+let fuel = 'gasolina';
+let touched = [];
+
+/* ---------- Combustível ---------- */
+function setFuel(f) {
+  fuel = f;
+  const on = { gasolina: 'bg-fuel/15 border-fuel text-fuel', etanol: 'bg-eta/15 border-eta text-eta' };
+  const off = 'border-line text-mute';
+  [['fuelGas', 'gasolina'], ['fuelEth', 'etanol']].forEach(([id, k]) => {
+    const b = $(id);
+    b.className = 'fuel-btn rounded-xl border py-3 font-medium transition-colors ' + (k === f ? on[k] : off);
+    b.setAttribute('aria-checked', k === f);
+  });
+}
+$('fuelGas').onclick = () => setFuel('gasolina');
+$('fuelEth').onclick = () => setFuel('etanol');
+setFuel('gasolina');
+
+/* ---------- Cálculo dinâmico ---------- */
+function onCalc(id) {
+  touched = touched.filter(x => x !== id);
+  if ($(id).value.trim() !== '') touched.push(id);
+  if (touched.length > 2) touched.shift();
+  if (touched.length < 2) return;
+  const target = ['price', 'liters', 'total'].find(k => !touched.includes(k));
+  const p = num($('price').value), l = num($('liters').value), t = num($('total').value);
+  if (target === 'total' && p && l) $('total').value = (p * l).toFixed(2);
+  else if (target === 'liters' && p && t) $('liters').value = (t / p).toFixed(2);
+  else if (target === 'price' && l && t) $('price').value = (t / l).toFixed(3);
+}
+['price', 'liters', 'total'].forEach(id => $(id).addEventListener('input', () => onCalc(id)));
+
+/* ---------- Salvar ---------- */
+function formError(msg) { const m = $('formMsg'); m.textContent = msg; m.classList.toggle('hidden', !msg); }
+
+$('saveBtn').onclick = async () => {
+  formError('');
+  const odometer = num($('odometer').value), price = num($('price').value),
+        liters = num($('liters').value), total = num($('total').value);
+  if (!odometer || odometer <= 0) return formError('Informe o odômetro atual.');
+  if (!price || !liters || !total) return formError('Preencha preço, litros e total (dois deles bastam).');
+  const maxOdo = rows.length ? Math.max(...rows.map(r => r.odometer)) : 0;
+  if (odometer < maxOdo && !confirm('O odômetro é menor que o último registro (' + fmt(maxOdo, 0) + ' km). Salvar mesmo assim?')) return;
+
+  const btn = $('saveBtn');
+  btn.disabled = true; btn.textContent = 'Salvando…'; btn.classList.add('opacity-70');
+  const { error } = await sb.from('fuel_entries').insert({
+    odometer, fuel_type: fuel, liters, price_per_liter: price, total_amount: total,
+    notes: $('notes').value.trim() || null
+  });
+  btn.classList.remove('opacity-70');
+  if (error) {
+    btn.disabled = false; btn.textContent = 'Salvar abastecimento';
+    return formError('Não foi possível salvar: ' + error.message);
+  }
+  btn.textContent = 'Salvo!';
+  btn.classList.replace('bg-fuel', 'bg-eta');
+  ['odometer', 'price', 'liters', 'total', 'notes'].forEach(id => $(id).value = '');
+  touched = [];
+  await load();
+  setTimeout(() => {
+    btn.disabled = false; btn.textContent = 'Salvar abastecimento';
+    btn.classList.replace('bg-eta', 'bg-fuel');
+  }, 1600);
+};
+
+/* ---------- Dados ---------- */
+async function load() {
+  const { data, error } = await sb.from('fuel_entries').select('*').order('created_at', { ascending: false }).limit(1000);
+  const box = $('errorBox');
+  if (error) { box.textContent = 'Erro ao carregar dados: ' + error.message; box.classList.remove('hidden'); return; }
+  box.classList.add('hidden');
+  rows = data.map(r => ({ ...r, odometer: Number(r.odometer), liters: Number(r.liters),
+    price_per_liter: Number(r.price_per_liter), total_amount: Number(r.total_amount) }));
+  renderStats(); renderPatterns(); renderHistory();
+}
+
+async function del(id) {
+  if (!confirm('Excluir este abastecimento?')) return;
+  const { error } = await sb.from('fuel_entries').delete().eq('id', id);
+  if (error) { alert('Não foi possível excluir: ' + error.message); return; }
+  load();
+}
+
+/* ---------- Estatísticas ---------- */
+function renderStats() {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  $('monthLabel').textContent = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const month = rows.filter(r => new Date(r.created_at) >= monthStart);
+
+  $('stSpent').textContent = brl(month.reduce((s, r) => s + r.total_amount, 0));
+
+  let kmMonth = null;
+  if (month.length) {
+    const before = rows.filter(r => new Date(r.created_at) < monthStart).map(r => r.odometer);
+    const mo = month.map(r => r.odometer);
+    const base = before.length ? Math.max(...before) : Math.min(...mo);
+    kmMonth = Math.max(...mo) - base;
+  }
+  $('stKm').textContent = kmMonth === null ? '–' : fmt(kmMonth, 0);
+
+  // pares consecutivos ordenados pelo odômetro
+  const asc = [...rows].sort((a, b) => a.odometer - b.odometer);
+  let km = 0, lit = 0, cost = 0, pairs = 0;
+  for (let i = 1; i < asc.length; i++) {
+    const d = asc[i].odometer - asc[i - 1].odometer;
+    if (d > 0 && asc[i].liters > 0) { km += d; lit += asc[i].liters; cost += asc[i].total_amount; pairs++; }
+  }
+  $('stAvg').textContent = pairs ? fmt(km / lit, 1) : '–';
+  $('stAvgSub').textContent = pairs ? 'Média de ' + pairs + (pairs > 1 ? ' trechos' : ' trecho') + ' entre abastecimentos.' : 'Registre ao menos 2 abastecimentos.';
+  $('stCpk').textContent = pairs ? fmt(cost / km, 2) : '–';
+}
+
+/* ---------- Padrões ---------- */
+function renderPatterns() {
+  const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const wd = Array(7).fill(0);
+  const bands = [
+    { name: 'Madrugada (0h–6h)', n: 0 }, { name: 'Manhã (6h–12h)', n: 0 },
+    { name: 'Tarde (12h–18h)', n: 0 }, { name: 'Noite (18h–24h)', n: 0 }
+  ];
+  rows.forEach(r => { const d = new Date(r.created_at); wd[d.getDay()]++; bands[Math.floor(d.getHours() / 6)].n++; });
+  const empty = rows.length === 0;
+  $('patternEmpty').classList.toggle('hidden', !empty);
+  $('weekdays').classList.toggle('hidden', empty);
+  $('bands').classList.toggle('hidden', empty);
+  if (empty) return;
+
+  const maxW = Math.max(...wd);
+  $('weekdays').innerHTML = wd.map((n, i) => `
+    <div class="flex-1 flex flex-col items-center justify-end h-full gap-1.5">
+      <span class="text-xs ${n === maxW ? 'text-fuel' : 'text-mute'}">${n}</span>
+      <div class="w-full rounded-md ${n === maxW ? 'bg-fuel' : 'bg-line'}" style="height:${Math.max(n / maxW * 100, 4)}%"></div>
+      <span class="text-xs text-mute">${days[i]}</span>
+    </div>`).join('');
+
+  const maxB = Math.max(...bands.map(b => b.n));
+  $('bands').innerHTML = bands.map(b => `
+    <div>
+      <div class="flex justify-between text-sm mb-1"><span>${b.name}</span><span class="text-mute">${b.n} · ${Math.round(b.n / rows.length * 100)}%</span></div>
+      <div class="h-2 rounded-full bg-ink"><div class="h-2 rounded-full ${b.n === maxB ? 'bg-fuel' : 'bg-line'}" style="width:${b.n / rows.length * 100}%"></div></div>
+    </div>`).join('');
+}
+
+/* ---------- Histórico ---------- */
+function renderHistory() {
+  const h = $('history');
+  if (!rows.length) { h.innerHTML = '<p class="text-sm text-mute">Nenhum abastecimento ainda. Use o formulário acima para registrar o primeiro.</p>'; return; }
+  h.innerHTML = rows.slice(0, 15).map(r => {
+    const d = new Date(r.created_at);
+    const isEta = r.fuel_type === 'etanol';
+    return `
+    <article class="rounded-2xl bg-panel border border-line p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-sm text-mute">${d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+          <p class="font-num text-2xl font-semibold mt-0.5">${brl(r.total_amount)}</p>
+        </div>
+        <span class="text-xs font-medium rounded-full px-2.5 py-1 border ${isEta ? 'border-eta text-eta bg-eta/10' : 'border-fuel text-fuel bg-fuel/10'}">${isEta ? 'Etanol' : 'Gasolina'}</span>
+      </div>
+      <p class="text-sm text-slate-300 mt-2">${fmt(r.liters, 2)} L × ${brl(r.price_per_liter)} · ${fmt(r.odometer, 0)} km</p>
+      ${r.notes ? `<p class="text-sm text-mute mt-1">${esc(r.notes)}</p>` : ''}
+      <button type="button" data-id="${esc(r.id)}" class="del mt-3 text-sm text-red-300 border border-red-400/30 rounded-lg px-3 py-1.5">Excluir</button>
+    </article>`;
+  }).join('');
+  h.querySelectorAll('.del').forEach(b => b.onclick = () => del(b.dataset.id));
+}
+
+load();
+</script>
+</body>
+</html>
 
