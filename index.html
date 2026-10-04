@@ -24,6 +24,7 @@ tailwind.config = {
   input, button { font-family: inherit; }
   input:focus-visible, button:focus-visible { outline: 2px solid #f2b134; outline-offset: 2px; }
   .field { width: 100%; background: #0f1a22; border: 1px solid #27394a; border-radius: 10px; padding: 12px 14px; color: #e8eef2; font-size: 17px; }
+  .field { color-scheme: dark; min-height: 50px; }
   .field::placeholder { color: #55697a; }
   .lbl { display: block; font-size: 13px; color: #8fa3b3; margin-bottom: 6px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -67,6 +68,10 @@ tailwind.config = {
       <div>
         <label class="lbl" for="odometer">Odômetro atual (km)</label>
         <input id="odometer" class="field" inputmode="numeric" placeholder="Ex.: 48250" autocomplete="off">
+      </div>
+      <div>
+        <label class="lbl" for="when">Data e hora do abastecimento</label>
+        <input id="when" type="datetime-local" class="field">
       </div>
       <div>
         <span class="lbl">Combustível</span>
@@ -158,13 +163,16 @@ $('saveBtn').onclick = async () => {
         liters = num($('liters').value), total = num($('total').value);
   if (!odometer || odometer <= 0) return formError('Informe o odômetro atual.');
   if (!price || !liters || !total) return formError('Preencha preço, litros e total (dois deles bastam).');
+  const when = new Date($('when').value);
+  if (isNaN(when)) return formError('Informe a data e a hora do abastecimento.');
+  if (when > new Date(Date.now() + 5 * 60000)) return formError('A data não pode estar no futuro.');
   const maxOdo = rows.length ? Math.max(...rows.map(r => r.odometer)) : 0;
   if (odometer < maxOdo && !confirm('O odômetro é menor que o último registro (' + fmt(maxOdo, 0) + ' km). Salvar mesmo assim?')) return;
 
   const btn = $('saveBtn');
   btn.disabled = true; btn.textContent = 'Salvando…'; btn.classList.add('opacity-70');
   const { error } = await sb.from('fuel_entries').insert({
-    odometer, fuel_type: fuel, liters, price_per_liter: price, total_amount: total,
+    created_at: when.toISOString(), odometer, fuel_type: fuel, liters, price_per_liter: price, total_amount: total,
     notes: $('notes').value.trim() || null
   });
   btn.classList.remove('opacity-70');
@@ -175,6 +183,7 @@ $('saveBtn').onclick = async () => {
   btn.textContent = 'Salvo!';
   btn.classList.replace('bg-fuel', 'bg-eta');
   ['odometer', 'price', 'liters', 'total', 'notes'].forEach(id => $(id).value = '');
+  setNow();
   touched = [];
   await load();
   setTimeout(() => {
@@ -286,6 +295,12 @@ function renderHistory() {
   h.querySelectorAll('.del').forEach(b => b.onclick = () => del(b.dataset.id));
 }
 
+function setNow() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  $('when').value = d.toISOString().slice(0, 16);
+}
+setNow();
 load();
 </script>
 </body>
